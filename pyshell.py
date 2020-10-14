@@ -3,21 +3,27 @@ import sys
 import subprocess
 import os
 import re
+import readline
+import glob
 from ansi import set_colors
 
 user_vars={}
 dbglog=None #open('dbg_pyshell.log','w')
 
+
 def dbg(x):
     if dbglog:
-        dbglog.write('{}\n'.format(x));
+        dbglog.write('{}\n'.format(x))
         dbglog.flush()
+
 
 def cwd():
     return os.getcwd()
 
+
 def curdir():
     return os.path.basename(cwd())
+
 
 def runcmd(cmd):
     if cmd.startswith('cd ') or cmd=='cd':
@@ -34,11 +40,13 @@ def runcmd(cmd):
         dbg("===: '{}'".format(cmd))
         return os.popen(cmd).read()
 
+
 def add_escapes(s):
     s=s.replace('\n','\\n')
     s=s.replace('\r','\\r')
     s=s.replace('\t','\\t')
     return s
+
 
 def process_back_quotes(cmd):
     while True:
@@ -49,6 +57,7 @@ def process_back_quotes(cmd):
         sub=add_escapes(sub)
         cmd=cmd[0:m.start(0)]+"'"+sub+"'"+cmd[m.end(0):]
     return cmd
+
 
 def process_escapes(cmd):
     p=-1
@@ -64,6 +73,7 @@ def process_escapes(cmd):
                 cmd = cmd[0:p] + '\t' + cmd[p + 2:]
     return cmd
 
+
 def run_python_cmd(cmd):
     try:
         exec (cmd, user_vars)
@@ -77,22 +87,38 @@ def run_python_cmd(cmd):
         print(e)
 
 
+def completer(text, state):
+    paths=glob.glob(text+'*')
+    if state < len(paths):
+        return paths[state]
+    else:
+        return None
+
+
 def main():
     done=False
     cont=False
     cmdlines=[]
+    user = os.environ['USER']
+    host = os.uname()[1]
     home=os.path.expanduser('~')
+    readline.parse_and_bind("tab: complete")
+    readline.set_completer(completer)
     while not done:
-        prompt=cwd()
-        if prompt.startswith(home):
-            prompt='~'+prompt[len(home):]
+        wd=os.getcwd()
+        if wd.startswith(home):
+            wd='~'+wd[len(home):]
+        prompt = f'\033[01;32m{user}@{host}\033[0m:\033[01;34m{wd}\033[0m> '
         if cont:
             prompt='...'
-        set_colors('blue','black',True)
-        sys.stdout.write('{}>'.format(prompt));
-        set_colors('green','black',False)
-        sys.stdout.flush()
-        cmd=sys.stdin.readline().rstrip()
+        try:
+            cmd = input(prompt).strip()
+        except EOFError:
+            print('')
+            break
+        except KeyboardInterrupt:
+            print('')
+            continue
         #cmd=process_escapes(cmd)
         cmd=process_back_quotes(cmd)
         dbg("cmd='{}'".format(cmd))
